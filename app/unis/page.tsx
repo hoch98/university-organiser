@@ -78,11 +78,72 @@ const allUniversitiesPdfStyles = StyleSheet.create({
   },
 });
 
+function getTodayDeadlineNumber(): number {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return Number(`${year}${month}${day}`);
+}
+
+function parseDeadlineNumber(input: string): number | null {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const checkDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    checkDate.getUTCFullYear() !== year ||
+    checkDate.getUTCMonth() !== month - 1 ||
+    checkDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return Number(digits);
+}
+
+function formatDeadline(deadline?: number): string {
+  const target =
+    typeof deadline === "number" && Number.isFinite(deadline)
+      ? deadline
+      : getTodayDeadlineNumber();
+  const str = String(Math.trunc(target));
+  if (str.length !== 8) return str;
+
+  const year = Number(str.slice(0, 4));
+  const month = Number(str.slice(4, 6));
+  const day = Number(str.slice(6, 8));
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(date.getTime())) return str;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export default function Page() {
   const [universities, setUniversities] = useState<Array<University>>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isExportingAll, setIsExportingAll] = useState(false);
+
+  const [editingDeadlineFor, setEditingDeadlineFor] = useState<string | null>(
+    null
+  );
+  const [deadlineDraft, setDeadlineDraft] = useState<string>("");
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
 
   const statusButtonClasses: Record<string, string> = {
     Considering:
@@ -97,7 +158,18 @@ export default function Page() {
     try {
       const saved = localStorage.getItem("university_list");
       if (saved) {
-        setUniversities(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const todayNum = getTodayDeadlineNumber();
+          const normalized: University[] = parsed.map((uni: University) => ({
+            ...uni,
+            deadline:
+              typeof uni.deadline === "number" && Number.isFinite(uni.deadline)
+                ? uni.deadline
+                : todayNum,
+          }));
+          setUniversities(normalized);
+        }
       }
     } catch (err) {
       console.error("Failed to read universities from localStorage:", err);
@@ -118,6 +190,7 @@ export default function Page() {
   function addUniversity(
     name: string,
     country: string,
+    deadline: number,
     supplementals: Record<string, string>
   ) {
     setUniversities((prev) => [
@@ -126,9 +199,33 @@ export default function Page() {
         name,
         country,
         status: "Considering",
+        deadline,
         supplementals,
       },
     ]);
+  }
+
+  function startEditingDeadline(uni: University) {
+    setEditingDeadlineFor(uni.name);
+    setDeadlineDraft(String(uni.deadline ?? getTodayDeadlineNumber()));
+    setDeadlineError(null);
+  }
+
+  function saveDeadline(uniName: string) {
+    const parsed = parseDeadlineNumber(deadlineDraft);
+    if (parsed === null) {
+      setDeadlineError("Use YYYYMMDD (e.g., 20261027)");
+      return;
+    }
+
+    setUniversities((prev) =>
+      prev.map((uni) =>
+        uni.name === uniName ? { ...uni, deadline: parsed } : uni
+      )
+    );
+    setEditingDeadlineFor(null);
+    setDeadlineDraft("");
+    setDeadlineError(null);
   }
 
   async function handleExportAllUniversities() {
@@ -139,7 +236,6 @@ export default function Page() {
       const AllUniversitiesDoc = () => (
         <Document title="All University Supplementals">
           <PdfPage size="A4" style={allUniversitiesPdfStyles.page}>
-
             {universities.map((uni) => {
               const questions = Object.keys(uni.supplementals ?? {});
 
@@ -220,13 +316,77 @@ export default function Page() {
               (university.name + university.country)
                 .toLowerCase()
                 .includes(searchQuery.toLowerCase())
-            )
+            ).sort((a:University, b: University) => a.deadline - b.deadline)
             .map((university: University) => {
+              const isEditingDeadline = editingDeadlineFor === university.name;
+
               return (
                 <Card className="w-full" key={university.name}>
                   <CardHeader>
                     <CardTitle>{university.name}</CardTitle>
-                    <CardDescription>{university.country}</CardDescription>
+                    <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{university.country}</span>
+                      <span>•</span>
+                      {isEditingDeadline ? (
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={deadlineDraft}
+                            onChange={(e) => {
+                              setDeadlineDraft(e.target.value);
+                              if (deadlineError) setDeadlineError(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                saveDeadline(university.name);
+                              } else if (e.key === "Escape") {
+                                setEditingDeadlineFor(null);
+                                setDeadlineError(null);
+                              }
+                            }}
+                            className="h-7 w-28 px-2 text-xs"
+                            placeholder="YYYYMMDD"
+                            autoFocus
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => saveDeadline(university.name)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setEditingDeadlineFor(null);
+                              setDeadlineError(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          {deadlineError && (
+                            <span className="text-destructive text-xs">
+                              {deadlineError}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEditingDeadline(university)}
+                          title="Click to edit deadline"
+                          className="text-foreground/80 hover:text-foreground cursor-pointer underline-offset-4 hover:underline"
+                        >
+                          Deadline: {formatDeadline(university.deadline)}
+                        </button>
+                      )}
+                    </CardDescription>
                     <CardAction>
                       <Badge
                         className={

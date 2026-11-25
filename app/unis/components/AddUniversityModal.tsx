@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -17,19 +16,50 @@ interface AddUniversityModalProps {
   addUniversity: (
     name: string,
     country: string,
+    deadline: number,
     supplementals: Record<string, string>
   ) => void;
 }
 
-export default function AddUniversityModal({addUniversity}: AddUniversityModalProps) {
+function parseDeadlineNumber(input: string): number | null {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const checkDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    checkDate.getUTCFullYear() !== year ||
+    checkDate.getUTCMonth() !== month - 1 ||
+    checkDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return Number(digits);
+}
+
+export default function AddUniversityModal({
+  addUniversity,
+}: AddUniversityModalProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
+  const [deadlineInput, setDeadlineInput] = useState("");
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<string[]>([""]);
 
   const resetForm = () => {
     setName("");
     setCountry("");
+    setDeadlineInput("");
+    setDeadlineError(null);
     setQuestions([""]);
   };
 
@@ -53,6 +83,14 @@ export default function AddUniversityModal({addUniversity}: AddUniversityModalPr
     const trimmedCountry = country.trim();
     if (!trimmedName || !trimmedCountry) return;
 
+    const parsedDeadline = parseDeadlineNumber(deadlineInput);
+    if (parsedDeadline === null) {
+      setDeadlineError("Enter a valid date as YYYYMMDD (e.g., 20261027).");
+      return;
+    }
+
+    setDeadlineError(null);
+
     const supplementals: Record<string, string> = {};
     for (const q of questions) {
       const trimmedQ = q.trim();
@@ -61,7 +99,7 @@ export default function AddUniversityModal({addUniversity}: AddUniversityModalPr
       }
     }
 
-    addUniversity(trimmedName, trimmedCountry, supplementals);
+    addUniversity(trimmedName, trimmedCountry, parsedDeadline, supplementals);
     resetForm();
     setOpen(false);
   };
@@ -106,6 +144,27 @@ export default function AddUniversityModal({addUniversity}: AddUniversityModalPr
                 onChange={(e) => setCountry(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="uni-deadline" className="text-sm font-medium">
+                Deadline (YYYYMMDD)
+              </label>
+              <Input
+                id="uni-deadline"
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g., 20261027"
+                value={deadlineInput}
+                onChange={(e) => {
+                  setDeadlineInput(e.target.value);
+                  if (deadlineError) setDeadlineError(null);
+                }}
+                required
+              />
+              {deadlineError && (
+                <p className="text-destructive m-0 text-xs">{deadlineError}</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
