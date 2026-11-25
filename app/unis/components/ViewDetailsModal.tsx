@@ -9,20 +9,38 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { University } from "@/lib/types"
-import React from 'react';
 import { pdf, Document, Page, Text, StyleSheet } from '@react-pdf/renderer';
+import { renderRichHtmlToPdfNodes } from "@/lib/renderer";
+import { View } from "@react-pdf/renderer";
 
 interface ModalProps {
   university: University
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 80 },
+  page: { padding: 64 },
   text: { fontSize: 12 }
 });
 
 export default function ViewDetailsModal({university}:ModalProps) {
   const supplementalQuestions = Object.keys(university.supplementals ?? {});
+
+  async function generateResponsePdf(
+    universityName: string,
+    htmlContent: string
+  ): Promise<Blob> {
+    const responseNodes = renderRichHtmlToPdfNodes(htmlContent);
+
+    const SupplementalDoc = () => (
+      <Document title={`${universityName} - Supplemental`}>
+        <Page size="A4" style={styles.page}>
+          <View>{responseNodes}</View>
+        </Page>
+      </Document>
+    );
+
+    return await pdf(<SupplementalDoc />).toBlob();
+  }
 
   return (
     <Dialog>
@@ -44,20 +62,34 @@ export default function ViewDetailsModal({university}:ModalProps) {
                   {question}
                 </p>
                 <div className="flex shrink-0 items-center gap-2">
-                  <Button onClick={async () => {
-                    const MyDocument = () => (
-                      <Document>
-                        <Page size="A4" style={styles.page}>
-                          <Text style={styles.text}>{university.supplementals![question]}</Text>
-                        </Page>
-                      </Document>
-                    );
+                  {/* View in new tab */}
+                  <Button
+                    onClick={async () => {
+                      const html = university.supplementals?.[question] ?? "";
+                      const blob = await generateResponsePdf(university.name, html);
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, "_blank");
+                    }}
+                  >
+                    View
+                  </Button>
 
-                    const blob = await pdf(<MyDocument />).toBlob();
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, '_blank');
-                  }}>View</Button>
-                  <Button>Export</Button>
+                  {/* Download PDF */}
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const html = university.supplementals?.[question] ?? "";
+                      const blob = await generateResponsePdf(university.name, html);
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${university.name.toLowerCase().replace(/\s+/g, "-")}-supplemental.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Export
+                  </Button>
                 </div>
               </div>
             ))

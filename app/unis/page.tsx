@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import ViewDetailsModal from "./components/ViewDetailsModal";
 import EditSupplementalsModal from "./components/EditSupplementalsModal";
+import AddUniversityModal from "./components/AddUniversityModal";
 
 export default function Page() {
 
@@ -51,11 +52,23 @@ export default function Page() {
       console.error("Failed to save universities to localStorage:", err);
     }
   }, [universities, hasLoaded]);
+
+  function addUniversity(name:string, country:string, supplementals:Record<string, string>) {
+    setUniversities([...universities, {
+      "name": name,
+      "country": country,
+      "status": "Considering",
+      "supplementals": supplementals
+    }])
+  }
   
   return (
     <div className="flex min-h-svh p-6 w-full">
       <div className="flex w-full gap-2 min-w-0 flex-col leading-loose">
-        <h1>Universities ({universities.length})</h1>
+        <div className="flex flex-row items-center justify-between">
+          <h1>Universities ({universities.length})</h1>
+          <AddUniversityModal addUniversity={addUniversity} />
+        </div>
         <Input 
           type="text" 
           placeholder="Search University..."

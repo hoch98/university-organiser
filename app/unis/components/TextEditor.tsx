@@ -1,58 +1,98 @@
-'use client';
+"use client";
 
-import { EditorContent, useEditor } from '@tiptap/react';
-import { Document } from '@tiptap/extension-document';
-import { Paragraph } from '@tiptap/extension-paragraph';
-import { Text } from '@tiptap/extension-text';
-import { RichTextProvider } from 'reactjs-tiptap-editor';
-import { Bold, RichTextBold } from 'reactjs-tiptap-editor/bold';
-import { Italic, RichTextItalic } from 'reactjs-tiptap-editor/italic';
-import { History, RichTextUndo, RichTextRedo } from 'reactjs-tiptap-editor/history';
-import 'reactjs-tiptap-editor/style.css';
-
-const extensions = [Document, Paragraph, Text, Bold, Italic, History];
+import { useEffect } from "react";
+import { useEditor } from "@tiptap/react";
+import { StarterKit } from "@tiptap/starter-kit";
+import { Underline } from "@tiptap/extension-underline";
+import { TextAlign } from "@tiptap/extension-text-align";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from "@tiptap/extension-color";
+import { Highlight } from "@tiptap/extension-highlight";
+import { CharacterCount } from "@tiptap/extension-character-count";
+import { RichTextEditor, Link } from "@/components/editor";
+import "@/components/editor/style.css";
 
 interface TextEditorProps {
-  dark?: boolean;
+  content?: string;
+  onChange?: (html: string) => void;
 }
 
-export default function TextEditor({ dark = true }: TextEditorProps) {
+export function TextEditor({ content = "", onChange }: TextEditorProps) {
   const editor = useEditor({
-    extensions,
-    content: '<p>Select some text and try the toolbar.</p>',
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
+    content,
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+      Link,
+      Underline,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Placeholder.configure({ placeholder: "Start typing..." }),
+      CharacterCount,
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+    ],
+    onUpdate: ({ editor }) => {
+      onChange?.(editor.getHTML());
+    },
   });
 
-  if (!editor) return null;
+  // Sync when switching to a different question or reopening with saved HTML
+  useEffect(() => {
+    if (!editor) return;
+    const currentHtml = editor.getHTML();
+    if (content !== currentHtml) {
+      editor.commands.setContent(content || "", { emitUpdate: false });
+    }
+  }, [content, editor]);
 
   return (
-    <div className={dark ? 'dark' : undefined}>
-      <RichTextProvider editor={editor} dark={dark}>
-        <div className="overflow-hidden border border-neutral-800 bg-neutral-950 text-neutral-100">
-          <div
-            role="toolbar"
-            aria-label="Text formatting"
-            className="flex flex-wrap gap-1 border-b border-neutral-800 bg-neutral-900 p-2"
-          >
-            <RichTextUndo />
-            <RichTextRedo />
-            <RichTextBold />
-            <RichTextItalic />
-          </div>
-          <EditorContent
-  editor={editor}
-  className="
-    text-neutral-100 caret-neutral-100
-    selection:bg-blue-500/40 selection:text-white
-    [&_.ProseMirror]:!p-3
-    [&_.ProseMirror]:min-h-32
-    [&_.ProseMirror]:outline-none
-    [&_.ProseMirror_*::selection]:bg-blue-500/40
-    [&_.ProseMirror_*::selection]:text-white
-  "
-/>
-        </div>
-      </RichTextProvider>
-    </div>
+    <RichTextEditor editor={editor}>
+      <RichTextEditor.Toolbar>
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.Bold />
+          <RichTextEditor.Italic />
+          <RichTextEditor.Underline />
+          <RichTextEditor.Strikethrough />
+          <RichTextEditor.ClearFormatting />
+        </RichTextEditor.ControlsGroup>
+
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.H1 />
+          <RichTextEditor.H2 />
+          <RichTextEditor.H3 />
+        </RichTextEditor.ControlsGroup>
+
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.BulletList />
+          <RichTextEditor.OrderedList />
+          <RichTextEditor.Blockquote />
+          <RichTextEditor.Hr />
+        </RichTextEditor.ControlsGroup>
+
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.AlignLeft />
+          <RichTextEditor.AlignCenter />
+          <RichTextEditor.AlignRight />
+        </RichTextEditor.ControlsGroup>
+
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.Link />
+          <RichTextEditor.Unlink />
+        </RichTextEditor.ControlsGroup>
+
+        <RichTextEditor.ControlsGroup>
+          <RichTextEditor.Undo />
+          <RichTextEditor.Redo />
+        </RichTextEditor.ControlsGroup>
+      </RichTextEditor.Toolbar>
+
+      <RichTextEditor.BubbleMenu editor={editor} />
+
+      <RichTextEditor.Content />
+      <RichTextEditor.Footer showWordCount />
+    </RichTextEditor>
   );
 }
