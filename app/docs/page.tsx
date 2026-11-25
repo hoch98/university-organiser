@@ -510,7 +510,7 @@ export default function DocsPage() {
                     <Input
                       id="doc-name"
                       type="text"
-                      placeholder="e.g., Transcript, Passport Scan, CV"
+                      placeholder="e.g., transcripts, passport scans, sat scores, etc..."
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
                     />
