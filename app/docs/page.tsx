@@ -328,7 +328,8 @@ export default function DocsPage() {
       }
 
       const mergedBytes = await mergedPdf.save();
-      const mergedBlob = new Blob([mergedBytes], { type: "application/pdf" });
+      const pdfBytes = new Uint8Array(mergedBytes);
+      const mergedBlob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(mergedBlob);
       const link = document.createElement("a");
       link.href = url;
