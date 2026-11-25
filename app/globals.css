@@ -127,3 +127,9 @@
     @apply font-sans;
     }
 }
+
+.ProseMirror::selection,
+.ProseMirror *::selection {
+  background-color: rgba(59, 130, 246, 0.45); /* blue */
+  color: #ffffff;
+}
