@@ -39,6 +39,66 @@ interface StoredDocument {
   blob?: Blob;
 }
 
+export interface ExportableDocument {
+  id: string;
+  name: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  updatedAt: string;
+  base64?: string;
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+export function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function restoreBytes(rawDoc: {
+  base64?: string;
+  bytes?: unknown;
+}): Uint8Array | undefined {
+  if (typeof rawDoc.base64 === "string" && rawDoc.base64.length > 0) {
+    return base64ToBytes(rawDoc.base64);
+  }
+
+  if (rawDoc.bytes instanceof Uint8Array) {
+    return rawDoc.bytes;
+  }
+
+  if (rawDoc.bytes && typeof rawDoc.bytes === "object") {
+    const values = Object.values(rawDoc.bytes as Record<string, number>);
+    if (values.length > 0 && typeof values[0] === "number") {
+      return new Uint8Array(values);
+    }
+  }
+
+  return undefined;
+}
+
+export function serializeDocumentsForBackup(
+  docs: StoredDocument[]
+): ExportableDocument[] {
+  return docs.map(({ bytes: _bytes, blob: _blob, ...rest }) => ({
+    ...rest,
+    base64: _bytes ? bytesToBase64(_bytes) : undefined,
+  }));
+}
+
 function openDocsDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !("indexedDB" in window)) {
@@ -440,7 +500,8 @@ export default function DocsPage() {
                   <DialogHeader>
                     <DialogTitle>Upload Document</DialogTitle>
                     <DialogDescription>
-                      All files are stored locally in IndexedDB
+                      Give your PDF document a name and store it locally in
+                      IndexedDB.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -449,7 +510,7 @@ export default function DocsPage() {
                     <Input
                       id="doc-name"
                       type="text"
-                      placeholder="e.g., transcripts, awards, SAT reports, etc..."
+                      placeholder="e.g., Transcript, Passport Scan, CV"
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
                     />
@@ -465,7 +526,7 @@ export default function DocsPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
                         if (file && !isPdfFile(file)) {
-                          setUploadError("Only PDF  files are allowed.");
+                          setUploadError("Only PDF (.pdf) files are allowed.");
                           setSelectedFile(null);
                           e.target.value = "";
                           return;
@@ -498,6 +559,7 @@ export default function DocsPage() {
               </DialogContent>
             </Dialog>
 
+            {/* Merge Documents Modal */}
             <Dialog
               open={mergeOpen}
               onOpenChange={(open) => {
@@ -518,7 +580,8 @@ export default function DocsPage() {
                 <DialogHeader>
                   <DialogTitle>Merge Documents</DialogTitle>
                   <DialogDescription>
-                    Select 2 or more files in order to combine them
+                    Select two or more PDFs and adjust their order before
+                    exporting a single merged PDF.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -642,6 +705,11 @@ export default function DocsPage() {
                     {doc.fileName} • {formatFileSize(doc.size)} • Updated{" "}
                     {new Date(doc.updatedAt).toLocaleDateString()}
                   </CardDescription>
+                  <CardAction>
+                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                      PDF
+                    </Badge>
+                  </CardAction>
                 </CardHeader>
 
                 <CardFooter className="flex flex-row flex-wrap gap-2">

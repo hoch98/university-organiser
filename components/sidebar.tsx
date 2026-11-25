@@ -28,6 +28,98 @@ interface BackupPayload {
   >;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function encodeRecordForBackup(value: unknown): unknown {
+  if (value instanceof Uint8Array) {
+    return { __base64: bytesToBase64(value) };
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    const view = new Uint8Array(
+      value.buffer,
+      value.byteOffset,
+      value.byteLength
+    );
+    return { __base64: bytesToBase64(view) };
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return { __base64: bytesToBase64(new Uint8Array(value)) };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(encodeRecordForBackup);
+  }
+
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      // Skip legacy Blob fields that serialize as {}
+      if (v instanceof Blob) continue;
+      out[k] = encodeRecordForBackup(v);
+    }
+    return out;
+  }
+
+  return value;
+}
+
+function decodeRecordFromBackup(value: unknown): unknown {
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+
+    if (typeof obj.__base64 === "string") {
+      return base64ToBytes(obj.__base64);
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(decodeRecordFromBackup);
+    }
+
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === "bytes" && v && typeof v === "object" && !Array.isArray(v)) {
+        const inner = v as Record<string, unknown>;
+        if (typeof inner.__base64 === "string") {
+          out[k] = base64ToBytes(inner.__base64);
+          continue;
+        }
+        // Backwards compatibility for legacy numeric-keyed Uint8Array objects
+        const numericValues = Object.values(inner);
+        if (
+          numericValues.length > 0 &&
+          typeof numericValues[0] === "number"
+        ) {
+          out[k] = new Uint8Array(numericValues as number[]);
+          continue;
+        }
+      }
+      out[k] = decodeRecordFromBackup(v);
+    }
+    return out;
+  }
+
+  return value;
+}
+
 async function dumpAllIndexedDB(): Promise<BackupPayload["indexedDB"]> {
   if (typeof window === "undefined" || !("indexedDB" in window)) {
     return {};
@@ -71,7 +163,8 @@ async function dumpAllIndexedDB(): Promise<BackupPayload["indexedDB"]> {
           const store = tx.objectStore(storeName);
           const getAllReq = store.getAll();
           getAllReq.onsuccess = () => {
-            storesData[storeName] = getAllReq.result ?? [];
+            const rawRecords = getAllReq.result ?? [];
+            storesData[storeName] = rawRecords.map(encodeRecordForBackup);
             completed += 1;
             if (completed === storeNames.length) {
               result[dbName] = { version: db.version, stores: storesData };
@@ -145,8 +238,9 @@ async function restoreAllIndexedDB(
           const store = tx.objectStore(storeName);
           store.clear();
           for (const item of records ?? []) {
+            const decodedItem = decodeRecordFromBackup(item);
             try {
-              store.put(item);
+              store.put(decodedItem);
             } catch {
               // Skip records whose inline keyPath doesn't match auto-generated keys
             }
@@ -183,7 +277,7 @@ export function AppSidebar() {
         indexedDB: idbData,
       };
 
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      const blob = new Blob([JSON.stringify(payload)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
