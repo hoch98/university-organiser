@@ -110,6 +110,7 @@ export default function EditSupplementalsModal({
                 </p>
               )}
             </div>
+            <hr />
           </>
         )}
       </DialogContent>

@@ -19,7 +19,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader> 
-        <span style={{textAlign: "center"}}>U-ORG</span>
+        <a style={{textAlign: "center"}} href="/">Uni Organiser</a>
       </SidebarHeader>
       <SidebarContent>
         {
