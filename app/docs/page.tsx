@@ -35,7 +35,8 @@ interface StoredDocument {
   mimeType: string;
   size: number;
   updatedAt: string;
-  blob: Blob;
+  bytes?: Uint8Array;
+  blob?: Blob;
 }
 
 function openDocsDB(): Promise<IDBDatabase> {
@@ -135,6 +136,45 @@ function ensurePdfFilename(label: string): string {
     : `${sanitized}.pdf`;
 }
 
+async function fileToPdfBytes(file: File): Promise<Uint8Array> {
+  const buffer = await file.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
+function toPdfBlob(doc: StoredDocument): Blob | null {
+  const data = doc.bytes ?? doc.blob;
+  if (!data) return null;
+
+  if (data instanceof Uint8Array) {
+    return data.byteLength > 0
+      ? new Blob([new Uint8Array(data)], { type: "application/pdf" })
+      : null;
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return data.byteLength > 0
+      ? new Blob([data], { type: "application/pdf" })
+      : null;
+  }
+
+  if (data instanceof Blob) {
+    return data.size > 0
+      ? new Blob([data], { type: "application/pdf" })
+      : null;
+  }
+
+  if (typeof data === "object") {
+    const values = Object.values(data);
+    if (values.length > 0 && typeof values[0] === "number") {
+      return new Blob([new Uint8Array(values as number[])], {
+        type: "application/pdf",
+      });
+    }
+  }
+
+  return null;
+}
+
 export default function DocsPage() {
   const [docs, setDocs] = useState<StoredDocument[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -185,9 +225,9 @@ export default function DocsPage() {
       return;
     }
 
-    const pdfBlob = toPdfBlob(viewingDoc.blob);
+    const pdfBlob = toPdfBlob(viewingDoc);
     if (!pdfBlob) {
-      console.error("Invalid document blob:", viewingDoc);
+      console.error("Invalid document bytes:", viewingDoc);
       setViewerUrl(null);
       return;
     }
@@ -201,9 +241,9 @@ export default function DocsPage() {
   }, [viewingDoc]);
 
   function handleDownloadDoc(doc: StoredDocument) {
-    const pdfBlob = toPdfBlob(doc.blob);
+    const pdfBlob = toPdfBlob(doc);
     if (!pdfBlob) {
-      console.error("Invalid document blob:", doc);
+      console.error("Invalid document bytes:", doc);
       return;
     }
 
@@ -227,8 +267,10 @@ export default function DocsPage() {
     setIsSaving(true);
     setUploadError(null);
     try {
+      const pdfBytes = await fileToPdfBytes(selectedFile);
       const trimmedName =
         docName.trim() || selectedFile.name.replace(/\.pdf$/i, "");
+
       const newDoc: StoredDocument = {
         id: crypto.randomUUID(),
         name: trimmedName,
@@ -236,7 +278,7 @@ export default function DocsPage() {
         mimeType: "application/pdf",
         size: selectedFile.size,
         updatedAt: new Date().toISOString(),
-        blob: selectedFile,
+        bytes: pdfBytes,
       };
 
       await putDocumentInDB(newDoc);
@@ -272,13 +314,15 @@ export default function DocsPage() {
     }
 
     try {
+      const pdfBytes = await fileToPdfBytes(file);
       const updated: StoredDocument = {
-        ...replacingDoc,
+        id: replacingDoc.id,
+        name: replacingDoc.name,
         fileName: file.name,
         mimeType: "application/pdf",
         size: file.size,
         updatedAt: new Date().toISOString(),
-        blob: file,
+        bytes: pdfBytes,
       };
 
       await putDocumentInDB(updated);
@@ -319,21 +363,6 @@ export default function DocsPage() {
       return next;
     });
   }
-  function toPdfBlob(blobOrData: unknown): Blob | null {
-    if (!blobOrData) return null;
-
-    if (blobOrData instanceof Blob) {
-      return blobOrData.type === "application/pdf"
-        ? blobOrData
-        : new Blob([blobOrData], { type: "application/pdf" });
-    }
-
-    if (blobOrData instanceof ArrayBuffer || ArrayBuffer.isView(blobOrData)) {
-      return new Blob([blobOrData as BlobPart], { type: "application/pdf" });
-    }
-
-    return null;
-  }
 
   async function handleMergeAndExport() {
     if (selectedMergeIds.length < 2) return;
@@ -346,7 +375,10 @@ export default function DocsPage() {
         const doc = docs.find((d) => d.id === id);
         if (!doc) continue;
 
-        const arrayBuffer = await doc.blob.arrayBuffer();
+        const pdfBlob = toPdfBlob(doc);
+        if (!pdfBlob) continue;
+
+        const arrayBuffer = await pdfBlob.arrayBuffer();
         const sourcePdf = await PDFDocument.load(arrayBuffer);
         const copiedPages = await mergedPdf.copyPages(
           sourcePdf,
