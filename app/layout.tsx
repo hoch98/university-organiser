@@ -24,6 +24,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
     >
+      <title>University Organiser</title>
       <body>
         <ThemeProvider>
           <SidebarProvider>

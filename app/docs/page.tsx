@@ -580,8 +580,7 @@ export default function DocsPage() {
                 <DialogHeader>
                   <DialogTitle>Merge Documents</DialogTitle>
                   <DialogDescription>
-                    Select two or more PDFs and adjust their order before
-                    exporting a single merged PDF.
+                    Select two or more files and adjust their order to merge them into 1 doc.
                   </DialogDescription>
                 </DialogHeader>
 

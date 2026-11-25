@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const pages = {
+  Home: "/",
   Universities: "/unis",
   Documents: "/docs",
 };
