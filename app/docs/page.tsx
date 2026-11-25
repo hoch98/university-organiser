@@ -440,8 +440,7 @@ export default function DocsPage() {
                   <DialogHeader>
                     <DialogTitle>Upload Document</DialogTitle>
                     <DialogDescription>
-                      Give your PDF document a name and store it locally in
-                      IndexedDB.
+                      All files are stored locally in IndexedDB
                     </DialogDescription>
                   </DialogHeader>
 
@@ -450,7 +449,7 @@ export default function DocsPage() {
                     <Input
                       id="doc-name"
                       type="text"
-                      placeholder="e.g., Transcript, Passport Scan, CV"
+                      placeholder="e.g., transcripts, awards, SAT reports, etc..."
                       value={docName}
                       onChange={(e) => setDocName(e.target.value)}
                     />
@@ -466,7 +465,7 @@ export default function DocsPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0] ?? null;
                         if (file && !isPdfFile(file)) {
-                          setUploadError("Only PDF (.pdf) files are allowed.");
+                          setUploadError("Only PDF  files are allowed.");
                           setSelectedFile(null);
                           e.target.value = "";
                           return;
@@ -499,7 +498,6 @@ export default function DocsPage() {
               </DialogContent>
             </Dialog>
 
-            {/* Merge Documents Modal */}
             <Dialog
               open={mergeOpen}
               onOpenChange={(open) => {
@@ -520,8 +518,7 @@ export default function DocsPage() {
                 <DialogHeader>
                   <DialogTitle>Merge Documents</DialogTitle>
                   <DialogDescription>
-                    Select two or more PDFs and adjust their order before
-                    exporting a single merged PDF.
+                    Select 2 or more files in order to combine them
                   </DialogDescription>
                 </DialogHeader>
 
@@ -645,11 +642,6 @@ export default function DocsPage() {
                     {doc.fileName} • {formatFileSize(doc.size)} • Updated{" "}
                     {new Date(doc.updatedAt).toLocaleDateString()}
                   </CardDescription>
-                  <CardAction>
-                    <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                      PDF
-                    </Badge>
-                  </CardAction>
                 </CardHeader>
 
                 <CardFooter className="flex flex-row flex-wrap gap-2">
