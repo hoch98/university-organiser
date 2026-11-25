@@ -185,7 +185,14 @@ export default function DocsPage() {
       return;
     }
 
-    const url = URL.createObjectURL(viewingDoc.blob);
+    const pdfBlob = toPdfBlob(viewingDoc.blob);
+    if (!pdfBlob) {
+      console.error("Invalid document blob:", viewingDoc);
+      setViewerUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
     setViewerUrl(url);
 
     return () => {
@@ -194,7 +201,13 @@ export default function DocsPage() {
   }, [viewingDoc]);
 
   function handleDownloadDoc(doc: StoredDocument) {
-    const url = URL.createObjectURL(doc.blob);
+    const pdfBlob = toPdfBlob(doc.blob);
+    if (!pdfBlob) {
+      console.error("Invalid document blob:", doc);
+      return;
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement("a");
     link.href = url;
     link.download = ensurePdfFilename(doc.name);
@@ -305,6 +318,21 @@ export default function DocsPage() {
       next.splice(targetIndex, 0, moved);
       return next;
     });
+  }
+  function toPdfBlob(blobOrData: unknown): Blob | null {
+    if (!blobOrData) return null;
+
+    if (blobOrData instanceof Blob) {
+      return blobOrData.type === "application/pdf"
+        ? blobOrData
+        : new Blob([blobOrData], { type: "application/pdf" });
+    }
+
+    if (blobOrData instanceof ArrayBuffer || ArrayBuffer.isView(blobOrData)) {
+      return new Blob([blobOrData as BlobPart], { type: "application/pdf" });
+    }
+
+    return null;
   }
 
   async function handleMergeAndExport() {
